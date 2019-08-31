@@ -1133,6 +1133,10 @@ static vm *inc_ip(vm *_vm, inst *_inst) {
 }
 
 vm *exec_op(vm *_vm, inst *_inst) {
+  char * disas = disas_inst(_inst);
+  fprintf(stderr, "IP = %08x >> %s\n", _vm->regs->regs[IP], disas);
+  free(disas);
+
   if (_inst->opcode >= ADD && _inst->opcode <= MODU) {
     arith_ops[_inst->opcode - ADD](_vm, _inst);
     goto done_inc;
