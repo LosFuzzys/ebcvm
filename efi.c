@@ -5,9 +5,26 @@
 #define ConIn_Reset_MAGIC 0x59928d645b6e0de4
 #define ConIn_ReadKeyStroke_MAGIC 0xa1b4e93c32d682d0
 #define BS_AllocatePool_MAGIC 0xd61390cb796062bb
+#define BS_WaitForEvent_MAGIC 0x5b9857eeaa9427f2
 
 static size_t calc_offset(size_t size) {
   return size + size % ARCH_BYTES;
+}
+
+static void bs_wait_for_event(vm *_vm) {
+  uint64_t stack_top = _vm->regs->regs[R0];
+  uint64_t ret_addr = read_mem64(_vm->mem, stack_top);
+  /* number_of_events = stack_top + 16 */
+  /* events = stack_top + 24 */
+  uint64_t index = read_mem64(_vm->mem, stack_top + 32);
+  write_mem64(_vm->mem, index, 0);
+
+  // TODO: do this
+
+  _vm->regs->regs[R7] = EFI_SUCCESS;
+  /* XXX: MOVqq R0, R0 (+2, 0) */
+  _vm->regs->regs[R0] += ARCH_BYTES * 2;
+  _vm->regs->regs[IP] = ret_addr;
 }
 
 static void bs_allocate_pool(vm *_vm) {
@@ -134,6 +151,11 @@ static void set_efi_bs(uint64_t bs, vm *_vm) {
   offset += calc_offset(sizeof(VOID_PTR)); /* FreePages */
   offset += calc_offset(sizeof(VOID_PTR)); /* GetMemoryMap */
   write_mem64(_vm->mem, bs + offset, BS_AllocatePool_MAGIC);
+  offset += calc_offset(sizeof(VOID_PTR));
+  offset += calc_offset(sizeof(VOID_PTR)); /* FreePool */
+  offset += calc_offset(sizeof(VOID_PTR)); /* CreateEvent */
+  offset += calc_offset(sizeof(VOID_PTR)); /* SetTimer */
+  write_mem64(_vm->mem, bs + offset, BS_WaitForEvent_MAGIC);
 }
 
 vm *load_efi(uint64_t addr, vm *_vm) {
@@ -197,6 +219,9 @@ void handle_excall(uint64_t code, vm *_vm) {
       break;
     case BS_AllocatePool_MAGIC:
       bs_allocate_pool(_vm);
+      break;
+    case BS_WaitForEvent_MAGIC:
+      bs_wait_for_event(_vm);
       break;
     default:
       raise_except(UNDEF, "invalid excall", __FILE__, __LINE__);
