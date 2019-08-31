@@ -1133,9 +1133,29 @@ static vm *inc_ip(vm *_vm, inst *_inst) {
 }
 
 vm *exec_op(vm *_vm, inst *_inst) {
+  static int instcnt = 0;
+  static int calldepth = 0;
   char * disas = disas_inst(_inst);
-  fprintf(stderr, "IP = %08x >> %s\n", _vm->regs->regs[IP], disas);
+  uint64_t * r = _vm->regs->regs;
+  fprintf(stderr, "[%08d] IP %08lx |", instcnt, r[IP]);
+
+  for (int i = 0; i < calldepth; i++) {
+    fprintf(stderr, ">>");
+  }
+
+  fprintf(stderr, " %-30s", disas);
+
+  for (int i = 0; i < 10 - calldepth; i++) {
+    fprintf(stderr, "  ");
+  }
+
+  fprintf(stderr,
+    "SP=%016lx R1=%016lx R2=%016lx R3=%016lx "
+    "R4=%016lx R5=%016lx R6=%016lx R7=%016lx\n",
+    r[R0], r[R1], r[R2], r[R3], r[R4], r[R5], r[R6], r[R7]
+  );
   free(disas);
+  instcnt++;
 
   if (_inst->opcode >= ADD && _inst->opcode <= MODU) {
     arith_ops[_inst->opcode - ADD](_vm, _inst);
@@ -1164,6 +1184,7 @@ vm *exec_op(vm *_vm, inst *_inst) {
       exec_jmp8(_vm, _inst);
       goto done_ret;
     case CALL:
+      if (!_inst->is_native) calldepth++;
       exec_call(_vm, _inst);
       goto done_ret;
     case EXTNDB:
@@ -1201,6 +1222,7 @@ vm *exec_op(vm *_vm, inst *_inst) {
       exec_pushn(_vm, _inst);
       goto done_inc;
     case RET:
+      calldepth--;
       exec_ret(_vm, _inst);
       goto done_ret;
     case LOADSP:
