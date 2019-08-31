@@ -2,6 +2,7 @@
 #include "efi.h"
 
 #define ConOut_OutputString_MAGIC 0xdbec42e5063aa942
+#define ConIn_Reset_MAGIC 0x59928d645b6e0de4
 #define ConIn_ReadKeyStroke_MAGIC 0xa1b4e93c32d682d0
 #define BS_AllocatePool_MAGIC 0xd61390cb796062bb
 
@@ -29,6 +30,18 @@ static void bs_allocate_pool(vm *_vm) {
     raise_except(MEMORY, "heap not found", __FILE__, __LINE__);
 
   write_mem64(_vm->mem, buffer, heap_addr);
+
+  _vm->regs->regs[R7] = EFI_SUCCESS;
+  /* XXX: MOVqq R0, R0 (+2, 0) */
+  _vm->regs->regs[R0] += ARCH_BYTES * 2;
+  _vm->regs->regs[IP] = ret_addr;
+}
+
+static void conin_reset(vm *_vm) {
+  uint64_t stack_top = _vm->regs->regs[R0];
+  uint64_t ret_addr = read_mem64(_vm->mem, stack_top);
+
+  // TODO: do this
 
   _vm->regs->regs[R7] = EFI_SUCCESS;
   /* XXX: MOVqq R0, R0 (+2, 0) */
@@ -101,6 +114,7 @@ static void set_efi_system_table(uint64_t table, uint64_t addrs[], vm *_vm) {
 
 static void set_efi_conin(uint64_t conin, vm *_vm) {
   uint64_t offset = 0;
+  write_mem64(_vm->mem, conin + offset, ConIn_Reset_MAGIC);
   offset += calc_offset(sizeof(VOID_PTR)); /* Reset */
   write_mem64(_vm->mem, conin + offset, ConIn_ReadKeyStroke_MAGIC);
 }
@@ -172,6 +186,9 @@ fail:
 
 void handle_excall(uint64_t code, vm *_vm) {
   switch (code) {
+    case ConIn_Reset_MAGIC:
+      conin_reset(_vm);
+      break;
     case ConIn_ReadKeyStroke_MAGIC:
       conin_read_key_stroke(_vm);
       break;
